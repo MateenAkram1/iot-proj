@@ -14,6 +14,7 @@ from flask_cors import CORS
 
 from config import (
     AUTOSTART_POLLER,
+    FALL_CONFIDENCE_THRESHOLD,
     FALL_MODEL_TIMESTEPS,
     POLL_INTERVAL_SEC,
     FIREBASE_HOST,
@@ -164,12 +165,18 @@ def process_pipeline(*, force: bool = False) -> dict[str, Any]:  # noqa: ARG001
         return {"ok": False, "error": str(exc), "stage": "inference"}
 
     fall_hit = model_indicates_fall(preds)
+    confidence = float(preds.get("fall_confidence") or 0.0)
+    confidence_pass = confidence >= FALL_CONFIDENCE_THRESHOLD
+    should_patch_fall = fall_hit and confidence_pass
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
     with _lock:
         _last_prediction = {
             **preds,
             "model_fall": fall_hit,
+            "confidence_threshold": FALL_CONFIDENCE_THRESHOLD,
+            "confidence_pass": confidence_pass,
+            "patch_decision": should_patch_fall,
             "evaluated_at": now,
             "window_rows_effective": FALL_MODEL_TIMESTEPS,
             "window": {"window_mode": "firebase_single_row", "live_rows": 1, "model_timesteps": FALL_MODEL_TIMESTEPS},
@@ -181,11 +188,11 @@ def process_pipeline(*, force: bool = False) -> dict[str, Any]:  # noqa: ARG001
         "Model | class=%s label=%r confidence=%.4f -> fall_alarm=%s",
         preds.get("fall_class"),
         preds.get("fall_label"),
-        float(preds.get("fall_confidence") or 0.0),
-        fall_hit,
+        confidence,
+        should_patch_fall,
     )
 
-    if fall_hit:
+    if should_patch_fall:
         try:
             _logger.info(
                 'PATCH %s merge {{"fallDetected": true}}',
@@ -207,7 +214,13 @@ def process_pipeline(*, force: bool = False) -> dict[str, Any]:  # noqa: ARG001
         }
 
     _last_written_fall = False
-    _logger.info("No fall → leave fallDetected false; next poll in %.1fs", POLL_INTERVAL_SEC)
+    _logger.info(
+        "No patch: class_is_fall=%s confidence=%.4f threshold=%.2f | next poll in %.1fs",
+        fall_hit,
+        confidence,
+        FALL_CONFIDENCE_THRESHOLD,
+        POLL_INTERVAL_SEC,
+    )
     return {"ok": True, "skipped": False, "predictions": preds, "fallDetected_written": False}
 
 
@@ -219,6 +232,7 @@ def root():
             "vitals_path": FIREBASE_VITALS_PATH,
             "poll_interval_sec": POLL_INTERVAL_SEC,
             "model_timesteps": FALL_MODEL_TIMESTEPS,
+            "fall_confidence_threshold": FALL_CONFIDENCE_THRESHOLD,
             "endpoints": {
                 "health": "/health",
                 "status": "/api/status",

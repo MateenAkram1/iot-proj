@@ -53,6 +53,7 @@ _scaler_override = os.getenv("SCALER_PATH", "").strip()
 SCALER_PATH = _scaler_override or os.path.join(MODELS_DIR, "scaler.pkl")
 
 FALL_MODEL_TIMESTEPS = int(os.getenv("FALL_MODEL_TIMESTEPS", "200"))
+FALL_CONFIDENCE_THRESHOLD = float(os.getenv("FALL_CONFIDENCE_THRESHOLD", "0.90"))
 
 # Multiclass fallback: these exact labels in acc_gyr.csv count as fall-related activity.
 FALL_ACTIVITY_LABELS = frozenset(

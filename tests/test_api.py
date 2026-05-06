@@ -101,6 +101,25 @@ def test_sync_patches_when_model_says_fall(client):
     patch_fire.assert_called_once_with(True)
 
 
+def test_sync_does_not_patch_when_fall_but_below_confidence_threshold(client):
+    preds_low_conf_fall = {
+        "fall_class": 1,
+        "fall_label": "fall",
+        "fall_confidence": 0.5,
+    }
+    with (
+        patch("app.fetch_vitals", return_value=_minimal_vitals(False)),
+        patch("app.load_models"),
+        patch("app.predict_fall_from_flat", return_value=preds_low_conf_fall),
+        patch("app.vitals_patch_fall_detected") as patch_fire,
+    ):
+        r = client.get("/api/sync?force=1")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["fallDetected_written"] is False
+    patch_fire.assert_not_called()
+
+
 def test_vitals_proxy(client):
     vit = _minimal_vitals(False)
     with patch("app.fetch_vitals", return_value=vit):

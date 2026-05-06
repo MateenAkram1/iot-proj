@@ -44,6 +44,7 @@ Read from `.env` (local) or platform env vars:
 - `LABEL_ENCODER_PATH`
 - `SCALER_PATH`
 - `FALL_MODEL_TIMESTEPS` (default `200`)
+- `FALL_CONFIDENCE_THRESHOLD` (default `0.90`, e.g. `0.90` for 90%)
 - `FALL_ACTIVITY_LABELS` (default `fall,lfall,rfall`)
 
 ## 3) Run Locally
